@@ -5,7 +5,7 @@ A modern construction material request management system built with React, TypeS
 ## 🚀 Features
 
 - **Material Request Management**: Create, edit, and delete material requests
-- **Status Workflow**: Track requests through pending → approved → delivered states
+- **Status Workflow**: Track requests through pending → approved → delivered states (click on status to change it)
 - **Multi-tenancy**: Company-level data isolation with Row Level Security (RLS)
 - **Real-time Updates**: Optimistic updates with React Query
 - **Filtering & Search**: Filter requests by status
