@@ -1,37 +1,72 @@
-import { useState, FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
+import { z } from 'zod'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+ 
+
+const baseSchema = {
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+}
+
+const signInSchema = z.object(baseSchema)
+
+const signUpSchema = z.object({
+  ...baseSchema,
+  fullName: z.string().min(2, 'Full name is required'),
+})
+
+type SignInForm = z.infer<typeof signInSchema>
+type SignUpForm = z.infer<typeof signUpSchema>
 
 type AuthMode = 'signin' | 'signup'
+ 
 
 export default function Login() {
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
   const { toast } = useToast()
-  
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [mode, setMode] = useState<AuthMode>('signin')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  const form = useForm<SignUpForm>({
+    resolver: zodResolver(mode === 'signup' ? signUpSchema : signInSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      fullName: '',
+    },
+  })
 
+  /* Reset form when switching mode */
+  useEffect(() => {
+    form.reset()
+  }, [mode, form])
+
+  const onSubmit = async (values: SignUpForm) => {
+    setLoading(true)
     try {
       if (mode === 'signup') {
-        await signUp(email, password)
+        await signUp(values.email, values.password, values.fullName)
         toast({
-          title: 'Success!',
-          description: 'Check your email for confirmation link.',
+          title: 'Account created',
+          description: 'Check your email to confirm your account.',
         })
       } else {
-        await signIn(email, password)
+        await signIn(values.email, values.password)
         toast({
           title: 'Welcome back!',
           description: 'You have successfully signed in.',
@@ -41,7 +76,8 @@ export default function Login() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: (error as Error).message,
+        description:
+          error instanceof Error ? error.message : 'Something went wrong',
         variant: 'destructive',
       })
     } finally {
@@ -55,21 +91,39 @@ export default function Login() {
         <CardHeader>
           <CardTitle>Welcome</CardTitle>
           <CardDescription>
-            {mode === 'signin' ? 'Sign in to your account' : 'Create a new account'}
+            {mode === 'signin'
+              ? 'Sign in to your account'
+              : 'Create a new account'}
           </CardDescription>
         </CardHeader>
+
         <CardContent>
-          <div className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {mode === 'signup' && (
+              <div>
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input
+                  id="fullName"
+                  {...form.register('fullName')}
+                  placeholder="John Doe"
+                />
+                <p className="text-sm text-red-500">
+                  {form.formState.errors.fullName?.message}
+                </p>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                {...form.register('email')}
                 placeholder="you@example.com"
-                required
               />
+              <p className="text-sm text-red-500">
+                {form.formState.errors.email?.message}
+              </p>
             </div>
 
             <div>
@@ -77,31 +131,35 @@ export default function Login() {
               <Input
                 id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                {...form.register('password')}
                 placeholder="••••••••"
-                required
               />
+              <p className="text-sm text-red-500">
+                {form.formState.errors.password?.message}
+              </p>
             </div>
 
-            <Button
-              onClick={handleSubmit}
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? 'Loading...' : mode === 'signin' ? 'Sign In' : 'Sign Up'}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading
+                ? 'Loading...'
+                : mode === 'signin'
+                ? 'Sign In'
+                : 'Sign Up'}
             </Button>
 
             <Button
+              type="button"
               variant="ghost"
-              onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+              onClick={() =>
+                setMode(mode === 'signin' ? 'signup' : 'signin')
+              }
               className="w-full"
             >
               {mode === 'signin'
                 ? "Don't have an account? Sign up"
                 : 'Already have an account? Sign in'}
             </Button>
-          </div>
+          </form>
         </CardContent>
       </Card>
     </div>
