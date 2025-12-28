@@ -14,24 +14,36 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Package, HardHat, Filter } from 'lucide-react';
+import LogoutButton from '@/components/LogoutButton';
 
 export default function MaterialRequests() {
   const [statusFilter, setStatusFilter] = useState<MaterialRequestStatus | 'all'>('all');
   const [formOpen, setFormOpen] = useState(false);
-  const [editRequest, setEditRequest] = useState<MaterialRequest | undefined>();
+  const [editRequest, setEditRequest] = useState<MaterialRequest | null>(null);
 
   const { data: requests = [], isLoading } = useMaterialRequests(
     statusFilter !== 'all' ? { status: statusFilter } : undefined
   );
 
   const handleEdit = (request: MaterialRequest) => {
+    console.log('Editing request:', request); // Debug log
     setEditRequest(request);
     setFormOpen(true);
   };
 
   const handleOpenChange = (open: boolean) => {
     setFormOpen(open);
-    if (!open) setEditRequest(undefined);
+    if (!open) {
+      // Use setTimeout to prevent UI flash when closing
+      setTimeout(() => {
+        setEditRequest(null);
+      }, 150);
+    }
+  };
+
+  const handleCreateNew = () => {
+    setEditRequest(null); // Ensure we're in create mode
+    setFormOpen(true);
   };
 
   // Stats
@@ -55,10 +67,13 @@ export default function MaterialRequests() {
               <p className="text-xs text-muted-foreground">BuildRight Construction</p>
             </div>
           </div>
-          <Button onClick={() => setFormOpen(true)} className="gap-2">
+          <div className="flex items-center gap-4">
+          <Button onClick={handleCreateNew} className="gap-2">
             <Plus className="h-4 w-4" />
             New Request
           </Button>
+          <LogoutButton/>
+          </div>
         </div>
       </header>
 
