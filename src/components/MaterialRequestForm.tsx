@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -36,11 +36,12 @@ import {
 import { MOCK_PROJECTS } from '@/lib/mock-data';
 import { useCreateMaterialRequest, useUpdateMaterialRequest } from '@/hooks/useMaterialRequests';
 import { Loader2, Package } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 const formSchema = z.object({
   material_name: z.string().min(2, 'Material name must be at least 2 characters').max(100),
   quantity: z.coerce.number().min(0.01, 'Quantity must be greater than 0'),
-  unit: z.enum(['kg', 'm', 'pieces', 'liters', 'bags', 'boxes', 'sheets', 'rolls']),
+  unit: z.enum(['kg', 'm', 'pieces', 'liters', 'bags', 'boxes', 'sheets', 'rolls', 'tons', 'sq ft', 'meters', 'sq meters', 'cubic meters']),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   project_id: z.string().optional(),
   notes: z.string().max(500).optional(),
@@ -51,44 +52,93 @@ type FormValues = z.infer<typeof formSchema>;
 interface MaterialRequestFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editRequest?: MaterialRequest;
+  editRequest?: MaterialRequest | null;
 }
 
 export function MaterialRequestForm({ open, onOpenChange, editRequest }: MaterialRequestFormProps) {
   const createMutation = useCreateMaterialRequest();
   const updateMutation = useUpdateMaterialRequest();
+  const {user} = useAuth();
   const isEditing = !!editRequest;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      material_name: editRequest?.material_name || '',
-      quantity: editRequest?.quantity || 0,
-      unit: editRequest?.unit || 'pieces',
-      priority: editRequest?.priority || 'medium',
-      project_id: editRequest?.project_id || '',
-      notes: editRequest?.notes || '',
+      material_name: '',
+      quantity: 0,
+      unit: 'pieces',
+      priority: 'medium',
+      project_id: '',
+      notes: '',
     },
   });
 
+  // Reset form when editRequest changes or dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      if (editRequest) {
+        // Editing mode - populate with existing data
+        console.log('Populating form with:', editRequest); // Debug log
+        form.reset({
+          material_name: editRequest.material_name,
+          quantity: editRequest.quantity,
+          unit: editRequest.unit,
+          priority: editRequest.priority,
+          project_id: editRequest.project_id || '',
+          notes: editRequest.notes || '',
+        });
+      } else {
+        // Create mode - reset to empty
+        form.reset({
+          material_name: '',
+          quantity: 0,
+          unit: 'pieces',
+          priority: 'medium',
+          project_id: '',
+          notes: '',
+        });
+      }
+    }
+  }, [open, editRequest, form]);
+
   const onSubmit = async (values: FormValues) => {
+    try {
+    if (!user?.company_id) {
+      throw new Error('User company not found');
+    }
+
     const input: CreateMaterialRequestInput = {
       material_name: values.material_name,
       quantity: values.quantity,
       unit: values.unit,
       priority: values.priority,
-      project_id: values.project_id || undefined,
-      notes: values.notes,
+      project_id: values.project_id || null,
+      notes: values.notes || null,
+      requested_by: user.id,
+      requested_by_name: user.full_name || user.email,
+      company_id: user.company_id, // Now using real company_id
     };
 
-    if (isEditing && editRequest) {
-      await updateMutation.mutateAsync({ id: editRequest.id, data: input });
-    } else {
-      await createMutation.mutateAsync(input);
-    }
+      if (isEditing && editRequest) {
+        await updateMutation.mutateAsync({ 
+          id: editRequest.id, 
+          data: {
+            material_name: input.material_name,
+            quantity: input.quantity,
+            unit: input.unit,
+            priority: input.priority,
+            project_id: input.project_id,
+            notes: input.notes,
+          }
+        });
+      } else {
+        await createMutation.mutateAsync(input);
+      }
 
-    form.reset();
-    onOpenChange(false);
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Failed to submit form:', error);
+    }
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending;
@@ -147,7 +197,7 @@ export function MaterialRequestForm({ open, onOpenChange, editRequest }: Materia
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Unit</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select unit" />
@@ -174,7 +224,7 @@ export function MaterialRequestForm({ open, onOpenChange, editRequest }: Materia
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Priority</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select priority" />
@@ -193,30 +243,33 @@ export function MaterialRequestForm({ open, onOpenChange, editRequest }: Materia
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="project_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Project (Optional)</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select project" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {MOCK_PROJECTS.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+<FormField
+  control={form.control}
+  name="project_id"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>Project (Optional)</FormLabel>
+      <Select 
+        onValueChange={field.onChange} 
+        value={field.value}
+      >
+        <FormControl>
+          <SelectTrigger>
+            <SelectValue placeholder="No project selected" />
+          </SelectTrigger>
+        </FormControl>
+        <SelectContent>
+          {MOCK_PROJECTS.map((project) => (
+            <SelectItem key={project.id} value={project.id}>
+              {project.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <FormMessage />
+    </FormItem>
+  )}
+/>
             </div>
 
             <FormField
