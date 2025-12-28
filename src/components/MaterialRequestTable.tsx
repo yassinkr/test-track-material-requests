@@ -43,7 +43,7 @@ export function MaterialRequestTable({ requests, isLoading, onEdit }: MaterialRe
   const deleteMutation = useDeleteMaterialRequest();
 
   const getProjectName = (projectId: string | null) => {
-    if (!projectId) return '—';
+    if (!projectId || projectId === '') return '—';
     const project = MOCK_PROJECTS.find(p => p.id === projectId);
     return project?.name || '—';
   };
